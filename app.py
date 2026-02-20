@@ -2,7 +2,7 @@ from flask import Flask, request, render_template, send_from_directory, jsonify
 import yt_dlp
 import os
 
-app = Flask(__name__, template_folder='.')
+app = Flask(__name__, template_folder='.', static_folder='static')
 
 DOWNLOAD_DIR = 'downloads'
 
@@ -21,8 +21,22 @@ def download():
     try:
         ydl_opts = {
             'outtmpl': os.path.join(DOWNLOAD_DIR, '%(title)s.%(ext)s'),
-            'format': format_choice,
+            'ffmpeg_location': '/usr/bin/ffmpeg',
         }
+
+        if format_choice == 'mp4':
+            ydl_opts['format'] = 'best[ext=mp4]'
+        elif format_choice == 'mp3':
+            ydl_opts['format'] = 'bestaudio/best'
+            ydl_opts['postprocessors'] = [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }]
+        elif format_choice == 'webm':
+            ydl_opts['format'] = 'best[ext=webm]'
+        else:
+            ydl_opts['format'] = 'best'
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -39,4 +53,4 @@ def download_file(filename):
     return send_from_directory(DOWNLOAD_DIR, filename)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', debug=True)

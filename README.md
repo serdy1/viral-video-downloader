@@ -29,6 +29,8 @@ Bu proje, YouTube, Instagram, Pinterest, Reddit ve Twitter gibi sosyal medya pla
 3. "Download" düğmesine tıklayın.
 4. İndirme hazır olduğunda, bağlantıya tıklayarak dosyayı indirin.
 
+**Not**: Bazı platformlar (YouTube, Instagram) bot koruması nedeniyle cookies gerektirebilir. Bu durumda, tarayıcınızdan cookies export edin ve yt-dlp'ye geçin. Alternatif olarak, açık kaynaklı videoları deneyin.
+
 ## Örnek Kullanım
 
 ```python
