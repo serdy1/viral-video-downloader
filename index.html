@@ -59,7 +59,11 @@
 
         .hide-scrollbar {
             -ms-overflow-style: none;
-            scrollbar-width: none;
+            /* scrollbar-width: none; - Covered by custom scrollbar styles or ignored if not supported */
+        }
+
+        .fill-icon {
+            font-variation-settings: 'FILL' 1;
         }
 
         body {
@@ -193,7 +197,7 @@
         </main>
 
         <nav
-            class="fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-6 pb-8 pt-3 z-50">
+            class="fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-slate-900/80 -webkit-backdrop-filter: blur(20px); backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 px-6 pb-8 pt-3 z-50">
             <div class="max-w-lg mx-auto flex items-center justify-between">
                 <a class="flex flex-col items-center gap-1 text-primary" href="#" onclick="showScreen('home-screen')">
                     <span class="material-symbols-outlined font-variation-fill">home</span>
@@ -356,7 +360,7 @@
                 </a>
                 <a class="flex flex-col items-center gap-1 text-primary" href="#"
                     onclick="showScreen('library-screen')">
-                    <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1">folder</span>
+                    <span class="material-symbols-outlined fill-icon">folder</span>
                     <span class="text-[10px] font-medium">Library</span>
                 </a>
                 <a class="flex flex-col items-center gap-1 text-slate-400" href="#"
@@ -375,6 +379,12 @@
     <script>
         let currentVideoData = null;
         let selectedFormat = 'best';
+        let downloadHistory = JSON.parse(localStorage.getItem('viral_download_history') || '[]');
+
+        // Initialize history on load
+        window.addEventListener('DOMContentLoaded', () => {
+            renderHistory();
+        });
 
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -397,17 +407,19 @@
                     method: 'POST',
                     body: formData
                 });
-                const data = await response.json();
 
-                if (data.error) {
-                    alert(data.error);
-                } else {
-                    currentVideoData = data;
-                    renderFormatOptions(data);
-                    showScreen('format-screen');
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: 'Server returned an error' }));
+                    throw new Error(errorData.error || `Server error: ${response.status}`);
                 }
+
+                const data = await response.json();
+                currentVideoData = data;
+                renderFormatOptions(data);
+                showScreen('format-screen');
             } catch (err) {
-                alert('An error occurred while analyzing the link.');
+                console.error(err);
+                alert('Error: ' + err.message);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<span class="material-symbols-outlined">analytics</span> Analyze Link';
@@ -422,15 +434,13 @@
             const container = document.getElementById('qualityOptions');
             container.innerHTML = '';
 
-            // Group formats or just show some common ones
-            const commonFormats = data.formats.slice(0, 5); // Just show first few for simplicity
+            const commonFormats = data.formats.slice(0, 5);
 
             if (commonFormats.length === 0) {
                 container.innerHTML = '<p class="text-slate-500">No specific formats found, using best available.</p>';
             }
 
             commonFormats.forEach((f, idx) => {
-                const id = `format_${idx}`;
                 const card = document.createElement('label');
                 card.className = 'flex items-center gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 cursor-pointer hover:border-primary/50 transition-all';
                 card.innerHTML = `
@@ -445,15 +455,6 @@
                 `;
                 container.appendChild(card);
             });
-
-            // Add custom CSS for radio buttons since we are using tailwind and hidden inputs
-            const style = document.createElement('style');
-            style.innerHTML = `
-                input:checked + .radio-check { border-color: #135bec; }
-                input:checked + .radio-check div { display: block; }
-                input:checked + .radio-check + div + div + div { border-color: #135bec; }
-            `;
-            // Actually just use classes for label
         }
 
         function formatViews(views) {
@@ -490,7 +491,16 @@
                 if (data.error) {
                     alert(data.error);
                 } else {
-                    addToLibrary(data.filename);
+                    const historyItem = {
+                        filename: data.filename,
+                        title: currentVideoData?.title || data.filename,
+                        date: new Date().toISOString(),
+                        thumbnail: currentVideoData?.thumbnail || null
+                    };
+                    downloadHistory.unshift(historyItem);
+                    localStorage.setItem('viral_download_history', JSON.stringify(downloadHistory));
+
+                    renderHistory();
                     showScreen('library-screen');
                     switchTab('completed');
                 }
@@ -502,29 +512,36 @@
             }
         }
 
-        function addToLibrary(filename) {
+        function renderHistory() {
             const list = document.getElementById('completed-tasks-list');
-            const item = document.createElement('div');
-            item.className = 'bg-white dark:bg-slate-800/40 rounded-2xl overflow-hidden border border-slate-100 dark:border-slate-800 shadow-sm p-3 flex gap-4 items-center';
-            item.innerHTML = `
-                <div class="relative flex-shrink-0">
-                    <div class="w-20 h-20 rounded-xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-                        <span class="material-symbols-outlined text-4xl">movie</span>
+            if (downloadHistory.length === 0) {
+                list.innerHTML = '<h2 class="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 px-1">Completed</h2><div class="text-center py-12 opacity-40"><p>No completed downloads</p></div>';
+                return;
+            }
+
+            list.innerHTML = '<h2 class="text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 px-1">Completed</h2>';
+            downloadHistory.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'bg-white dark:bg-slate-800/40 rounded-2xl overflow-hidden border border-slate-100 dark:border-slate-800 shadow-sm p-3 flex gap-4 items-center';
+                div.innerHTML = `
+                    <div class="relative flex-shrink-0">
+                        <div class="w-20 h-20 rounded-xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center bg-cover bg-center" style="background-image: ${item.thumbnail ? `url('${item.thumbnail}')` : 'none'}">
+                            ${!item.thumbnail ? '<span class="material-symbols-outlined text-4xl">movie</span>' : ''}
+                        </div>
                     </div>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <h3 class="font-semibold text-sm truncate pr-2">${filename}</h3>
-                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Completed</p>
-                    <div class="flex gap-4 mt-3">
-                        <a href="/downloads/${filename}" class="flex items-center gap-1.5 py-1 px-3 rounded-full bg-primary/10 text-primary">
-                            <span class="material-symbols-outlined text-[18px]">download</span>
-                            <span class="text-xs font-bold uppercase tracking-wider">Save</span>
-                        </a>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="font-semibold text-sm truncate pr-2">${item.title}</h3>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">${new Date(item.date).toLocaleDateString()}</p>
+                        <div class="flex gap-4 mt-3">
+                            <a href="/downloads/${item.filename}" class="flex items-center gap-1.5 py-1 px-3 rounded-full bg-primary/10 text-primary">
+                                <span class="material-symbols-outlined text-[18px]">download</span>
+                                <span class="text-xs font-bold uppercase tracking-wider">Save</span>
+                            </a>
+                        </div>
                     </div>
-                </div>
-            `;
-            list.querySelector('.text-center')?.remove();
-            list.appendChild(item);
+                `;
+                list.appendChild(div);
+            });
         }
 
         function switchTab(tab) {

@@ -66,6 +66,7 @@ def analyze():
             'quiet': True,
             'no_warnings': True,
             'format': 'best',
+            'socket_timeout': 10,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -73,13 +74,25 @@ def analyze():
             # Filter and prepare formats
             formats = []
             for f in info.get('formats', []):
-                if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
+                # Include combined formats or video-only formats that can be merged
+                if f.get('vcodec') != 'none':
                     formats.append({
                         'ext': f.get('ext'),
-                        'resolution': f.get('resolution'),
+                        'resolution': f.get('resolution') or f.get('format_note'),
+                        'filesize': f.get('filesize') or f.get('filesize_approx'),
+                        'format_id': f.get('format_id'),
+                        'note': f.get('format_note') or f.get('ext')
+                    })
+            
+            # If still no formats, just take the first few
+            if not formats:
+                for f in info.get('formats', [])[:5]:
+                    formats.append({
+                        'ext': f.get('ext'),
+                        'resolution': f.get('resolution') or 'N/A',
                         'filesize': f.get('filesize'),
                         'format_id': f.get('format_id'),
-                        'note': f.get('format_note')
+                        'note': f.get('format_note') or 'Best'
                     })
 
             return jsonify({
