@@ -21,8 +21,10 @@ def download():
     try:
         ydl_opts = {
             'outtmpl': os.path.join(DOWNLOAD_DIR, '%(title)s.%(ext)s'),
-            'ffmpeg_location': '/usr/bin/ffmpeg',
         }
+
+        # Check if ffmpeg is in path, else specific paths could be added
+        # For now, let yt-dlp try to find it automatically.
 
         if format_choice == 'mp4':
             ydl_opts['format'] = 'best[ext=mp4]'
@@ -35,8 +37,13 @@ def download():
             }]
         elif format_choice == 'webm':
             ydl_opts['format'] = 'best[ext=webm]'
-        else:
+        elif format_choice == 'best':
             ydl_opts['format'] = 'best'
+        else:
+            # Assume it's a format_id from the analyze step
+            ydl_opts['format'] = format_choice + '+bestaudio/best'
+            ydl_opts['merge_output_format'] = 'mp4'
+
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
